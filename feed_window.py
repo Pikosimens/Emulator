@@ -142,9 +142,6 @@ class FeedWindow(QDialog):
             self.progress.setVisible(False)
                 
             
-            
-            
-
 
 
     # -------------------------------
@@ -163,7 +160,7 @@ class FeedWindow(QDialog):
         
         signal, ts = self.parent_gui.stream.get_data(20) # SET WINDOW SIZE
         ppg = signal[self.ppg_idx, :]  
-        data = get_online_PPG(ppg, self.fs, self.baseline_params, window_size=20)
+        data = get_online_PPG(ppg, self.fs, self.baseline_params, window_size=8)
         
         data.pop("current_params", None)  # remove raw params
         
@@ -173,9 +170,9 @@ class FeedWindow(QDialog):
             self.circles[key].set_color(color)
 
         self.hr_label.setText(f"HR: {100*data["hr_change"]:.1f} %")
-        self.sdnn_label.setText(f"SDNN: {100*data['sdnn_change']:.3f} %")
-        self.rmssd_label.setText(f"RMSSD: {100*data['rmssd_change']:.3f} %")
-        self.rmssd_corrected_label.setText(f"RMSSD Corrected: {100*data['rmssd_corrected_change']:.3f} %")        
+        self.sdnn_label.setText(f"SDNN: {100*data['sdnn_change']:.1f} %")
+        self.rmssd_label.setText(f"RMSSD: {100*data['rmssd_change']:.1f} %")
+        self.rmssd_corrected_label.setText(f"RMSSD Corrected: {100*data['rmssd_corrected_change']:.1f} %")        
         
     # def get_online_PPG(self):
     #     """Mock function: simulate changing physiological data."""
