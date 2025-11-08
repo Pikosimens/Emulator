@@ -132,7 +132,7 @@ class FeedWindow(QDialog):
             print("PPG channel index:", self.ppg_idx)
             
             signal, ts = self.parent_gui.stream.get_data(60)
-            ppg = signal[self.ppg_idx, :]  # first channel
+            ppg = signal[self.ppg_idx, :] 
             self.fs = int(self.parent_gui.stream.info["sfreq"])
             self.baseline_params = get_baseline_PPG(ppg, self.fs, duration=60)
             

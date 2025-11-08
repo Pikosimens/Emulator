@@ -33,16 +33,20 @@ class HeartApp(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        # Buttons
+        # Buttons ---------------------------------------
+        
         self.start_btn = QPushButton("Emulate Stream")
         self.stop_btn = QPushButton("Stop Stream")
         self.connect_button = QPushButton("Connect to Stream")
-        self.feed_button = QPushButton("Open FEED")
+        self.PPG_button = QPushButton("Open PPG FEED")
+        self.EMG_button = QPushButton("Open EMG FEED")
         
         self.layout.addWidget(self.start_btn)
         self.layout.addWidget(self.stop_btn)
         self.layout.addWidget(self.connect_button)
-        self.layout.addWidget(self.feed_button)
+
+        self.layout.addWidget(self.PPG_button)
+        self.layout.addWidget(self.EMG_button)
         
         # Labels for metrics
         self.hr_label = QLabel("HR: -- bpm")
@@ -55,34 +59,46 @@ class HeartApp(QWidget):
         self.layout.addWidget(self.sdnn_label)
         self.layout.addWidget(self.rmssd_label)
         self.layout.addWidget(self.rmssd_corrected_label)
-        # self.layout.addWidget(self.rmssd_corrected_label) 
-        # Matplotlib figure
+        # self.layout.addWidget(self.rmssd_corrected_label)         
+        # -----------------------------------------------
+        
+        # Matplotlib figure -----------------------------
+        
         self.fig = Figure(figsize=(6, 3))
         self.canvas = FigureCanvas(self.fig)
         self.ax = self.fig.add_subplot(111)
         self.layout.addWidget(self.canvas)
 
 
-        # Signals
+        # Signals ----------------------------------------
         self.start_btn.clicked.connect(self.start_stream)
         self.stop_btn.clicked.connect(self.stop_stream)
         self.connect_button.clicked.connect(self.connect_stream)
-        self.feed_button.clicked.connect(self.open_feed_window)
+        self.feed_button.clicked.connect(self.open_PPG_feed_window)
+        self.EMG_button.clicked.connect(self.open_EMG_feed_window)
         
-        # State
+        # State variables ------------------------
         self.player = None
         self.stream = None
         self.timer = None
     
-    def open_feed_window(self):
+    # Открыть окно биологической обратной связи для PPG
+    def open_PPG_feed_window(self): 
         self.feed_window = FeedWindow(self)
         self.feed_window.exec_()
+    
+    # Открыть окно биологической обратной связи для EMG
+    def open_EMG_feed_window(self):
+        from feed_window_EMG import FeedWindowEMG
+        self.emg_feed_window = FeedWindowEMG(self)
+        self.emg_feed_window.exec_()
 
+    # Подключиться к LSL потоку
     def connect_stream(self):
         """Let the user pick an LSL stream and connect to it (PyQt5 + mne-lsl)."""
 
         # Step 1. Discover available LSL streams
-        streams = resolve_streams(timeout=5)
+        streams = resolve_streams(timeout=1)
         if not streams:
             QMessageBox.warning(self, "No streams", "No LSL streams found.")
             return
@@ -126,11 +142,11 @@ class HeartApp(QWidget):
         btn_ok.clicked.connect(on_ok)
         btn_cancel.clicked.connect(on_cancel)
 
-        # Step 3. Run the dialog modally
+        # Run the dialog modally
         if dlg.exec_() == QDialog.Accepted and selected_index["idx"] is not None:
             s = streams[selected_index["idx"]]
             try:
-                # Step 4. Connect to the chosen stream
+                # Connect to the chosen stream
                 self.stream = Stream(bufsize=60, name=s.name).connect()
                 QMessageBox.information(
                     self,
@@ -149,7 +165,7 @@ class HeartApp(QWidget):
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(1000)  # update every 500ms
         
-        
+    # Эмуляция LSL потока из EDF файла    
     def start_stream(self):
         # choose file
         fname, _ = QFileDialog.getOpenFileName(self, "Select EDF file", "", "FIF Files (*.edf)")
@@ -165,8 +181,7 @@ class HeartApp(QWidget):
         # connect to stream
         self.stream = Stream(bufsize=60, source_id=ppg_stream, name="PPG_Stream").connect()
         print(self.stream.info)
-        
-        
+
 
         # update periodically
         from PyQt5.QtCore import QTimer
@@ -174,6 +189,7 @@ class HeartApp(QWidget):
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(400)  # update every 500ms
 
+    # Stop emulation and streaming
     def stop_stream(self):
         if self.timer:
             self.timer.stop()
@@ -203,9 +219,7 @@ class HeartApp(QWidget):
         if not ppg_name:
             raise ValueError("No PPG channel found in stream!")
         
-        
         ppg_idx = self.stream.info["ch_names"].index(ppg_name)
-        
         
         ppg = data[ppg_idx, :]  # first channel
         fs = int(self.stream.info["sfreq"])

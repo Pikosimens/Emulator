@@ -3,7 +3,9 @@ from funcpack.filters import bandpass_HRV, bandpass_EMG
 import numpy as np
 from scipy.signal import find_peaks
 
-#   HRV
+
+
+# ================================= HRV ========================================
 
 def compute_heart_params(sig, fs):
     # TODO process anomalies in the signal
@@ -41,7 +43,6 @@ def compute_heart_params(sig, fs):
     
     
     
-    
 def get_baseline_PPG(sig, fs, duration=60):
     
     num_samples = duration * fs
@@ -54,6 +55,7 @@ def get_baseline_PPG(sig, fs, duration=60):
         raise ValueError("Not enough peaks detected in the baseline signal.")
     
     return params
+
 
 
 def get_online_PPG(sig, fs, baseline_params, window_size=5):
@@ -82,35 +84,60 @@ def get_online_PPG(sig, fs, baseline_params, window_size=5):
         "rmssd_corrected_change": rmssd_corrected_change
     }
     
-    
-def compute_emg_params(sig, fs):
-    
-    filtered = bandpass_EMG(sig, fs)
-    mean_emg = np.mean(filtered)
-    std_emg = np.std(filtered)
-    cumsum_emg = np.sum(np.square(filtered))
 
-    return {
-        "mean_emg": mean_emg,
-        "std_emg": std_emg,
-        "cumsum_emg": cumsum_emg
-    }
-        
-        
-def get_baseline_EMG(sig, fs, duration=60):
+
+# ================================= EMG ========================================
+
+def compute_emg_params(sig, fs, window_size=0.3):
+    # Default bandpass 55-95 Hz, default window size 300 ms
+    filtered = bandpass_EMG(sig, fs)
+    # mean_emg = np.mean(filtered)
+    # std_emg = np.std(filtered)
+    if (len(sig)/fs) < window_size:
+        raise Warning("Signal is shorter than the specified window size.")
+        return None
+    border = int(0.1*fs) # 100 ms border to avoid edge effects
     
-    num_samples = duration * fs
+    cropped = filtered[border:-border]
+    cropped = cropped - np.mean(cropped)  # remove DC offset
+    cumsum_emg = np.sum(np.square(cropped))
+    return cumsum_emg
+    # return {
+    #     "mean_emg": mean_emg,
+    #     "std_emg": std_emg,
+    #     "cumsum_emg": cumsum_emg
+    # }
+        
+
+        
+def get_baseline_EMG(sig, fs, duration=20, chunk_size=0.3):
+    
+    num_samples = int(duration * fs)
+    # print("num_samples for baseline EMG:", num_samples)
+    # print("len sig:", len(sig))
+    # print(sig.shape)
     if len(sig) < num_samples:
         raise Warning("Signal is shorter than the specified baseline duration.")
         return None
     
-    baseline_sig = sig[:num_samples]
-    params = compute_emg_params(baseline_sig, fs)
-    return params
-
-def get_online_EMG(sig, fs, baseline_params, window_size=15):
+    baseline_sig = sig[-num_samples:]
+    samples_per_chunk = int(chunk_size * fs)
+    chunks = np.array_split(baseline_sig, len(baseline_sig) // samples_per_chunk)
     
-    num_samples = window_size * fs
+    cumsum_list = []
+    for chunk in chunks:
+        cumsum = compute_emg_params(chunk, fs)
+        if cumsum is not None:
+            cumsum_list.append(cumsum)
+            
+    mean_emg = np.mean(cumsum_list)
+    return mean_emg
+
+
+
+def get_online_EMG(sig, fs, baseline_params, window_size=0.3):
+    
+    num_samples = int(window_size * fs)
     if len(sig) < num_samples:
         raise Warning("Signal is shorter than the specified window size.")
         return None
@@ -122,12 +149,6 @@ def get_online_EMG(sig, fs, baseline_params, window_size=15):
         return None
     
     # Compare with baseline
-    mean_emg_change = params["mean_emg"] / baseline_params["mean_emg"]
-    std_emg_change = params["std_emg"] / baseline_params["std_emg"]
-    cumsum_emg_change = params["cumsum_emg"] / baseline_params["cumsum_emg"]
+    mean_emg_change = params / baseline_params
     
-    return {
-        "mean_emg_change": mean_emg_change,
-        "std_emg_change": std_emg_change,
-        "cumsum_emg_change": cumsum_emg_change
-    }
+    return mean_emg_change
