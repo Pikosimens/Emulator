@@ -68,6 +68,10 @@ class FeedWindowEMG(QDialog):
         self.start_button = QPushButton("Start training")
         self.start_button.setVisible(False)
         layout.addWidget(self.start_button)
+        self.game_button = QPushButton("Start Game")
+        self.game_button.setVisible(False)
+        layout.addWidget(self.game_button)
+        self.game_button.clicked.connect(self.open_game)
 
         # # --- Circles Section (feedback visuals) ---
         # self.circles = {
@@ -132,6 +136,8 @@ class FeedWindowEMG(QDialog):
             self.baseline_collected = True
             self.label.setText("Baseline collected.")
             self.start_button.setVisible(True)
+            self.game_button.setVisible(True)
+
         else:
             self.label.setText("Failed to collect baseline.")
         
@@ -153,6 +159,7 @@ class FeedWindowEMG(QDialog):
         signal, ts = self.parent_gui.stream.get_data(2) # SET WINDOW SIZE
         
         for channel in self.active_chnames:
+            
             idx = self.emg_ids[channel]
             bsl_channel = self.baseline_params[channel]
             result[channel] = 100 * get_online_EMG(signal[idx, :], self.fs, bsl_channel)
@@ -160,14 +167,159 @@ class FeedWindowEMG(QDialog):
         feed_string = ""
             
         for channel in self.active_chnames:
+            
             feed_string += f"{channel}: {result[channel]:.2f} %   "
             
         self.cumsum_label.setText(f"Cumulative Change: {feed_string}")
         
-        
+    def open_game(self):
+        self.game = GameWindow(self.parent_gui)
+        self.game.exec_()
+    
         
         # for key, val in data.items():
         #     # convert val (-1…1 or percent change) → color
         #     color = self.map_value_to_color(val-1)
         #     self.circles[key].set_color(color)
 
+from PyQt5.QtWidgets import QProgressBar, QPushButton, QVBoxLayout, QHBoxLayout, QLabel
+
+class GameWindow(QDialog):
+    """Простая мини-игра типа Pong с управлением от LEX и LFL и визуальными индикаторами."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_gui = parent
+        self.setWindowTitle("EMG Pong Game")
+        self.setFixedSize(500, 450)
+
+        # Игровые переменные
+        self.ball_pos = [240, 200]
+        self.ball_vel = [4, 3]
+        self.paddle_x = 210
+        self.paddle_width = 80
+        self.paddle_height = 10
+        self.score = 0
+
+        # Таймер
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_game)
+        self.timer.start(33)  # ~30 fps
+
+        # --- Верхняя панель с индикаторами ---
+        top_layout = QHBoxLayout()
+
+        self.lex_bar = QProgressBar()
+        self.lex_bar.setOrientation(Qt.Vertical)
+        self.lex_bar.setRange(0, 100)
+        self.lex_bar.setValue(0)
+        self.lex_label = QLabel("LEX")
+        self.lex_label.setAlignment(Qt.AlignCenter)
+
+        self.lfl_bar = QProgressBar()
+        self.lfl_bar.setOrientation(Qt.Vertical)
+        self.lfl_bar.setRange(0, 100)
+        self.lfl_bar.setValue(0)
+        self.lfl_label = QLabel("LFL")
+        self.lfl_label.setAlignment(Qt.AlignCenter)
+
+        left_box = QVBoxLayout()
+        left_box.addWidget(self.lex_bar)
+        left_box.addWidget(self.lex_label)
+
+        right_box = QVBoxLayout()
+        right_box.addWidget(self.lfl_bar)
+        right_box.addWidget(self.lfl_label)
+
+        top_layout.addLayout(left_box)
+        top_layout.addStretch()
+        top_layout.addLayout(right_box)
+
+        # --- Кнопка завершения игры ---
+        self.end_button = QPushButton("End Game")
+        self.end_button.clicked.connect(self.close_game)
+
+        # --- Общий Layout ---
+        main_layout = QVBoxLayout(self)
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(self.end_button)
+
+    # ----------------------- Игровая логика -----------------------
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        # Мяч
+        p.setBrush(QBrush(Qt.blue))
+        p.drawEllipse(self.ball_pos[0], self.ball_pos[1], 15, 15)
+        # Ракетка
+        p.setBrush(QBrush(Qt.darkGray))
+        p.drawRect(int(self.paddle_x), 410, int(self.paddle_width), int(self.paddle_height))
+        # Счёт
+        p.setPen(Qt.black)
+        p.drawText(10, 20, f"Score: {self.score}")
+
+    def update_game(self):
+        """Обновление положения мяча и управление ракеткой по ЭМГ."""
+        # Движение мяча
+        self.ball_pos[0] += self.ball_vel[0]
+        self.ball_pos[1] += self.ball_vel[1]
+
+        # Столкновения со стенами
+        if self.ball_pos[0] <= 0 or self.ball_pos[0] >= self.width() - 15:
+            self.ball_vel[0] *= -1
+        if self.ball_pos[1] <= 0:
+            self.ball_vel[1] *= -1
+
+        # Проверка на касание ракетки
+        if self.ball_pos[1] >= 410:
+            if self.paddle_x <= self.ball_pos[0] <= self.paddle_x + self.paddle_width:
+                self.ball_vel[1] *= -1
+                self.score += 1
+            else:
+                # Промах — рестарт
+                self.ball_pos = [self.width()//2, self.height()//2]
+                self.ball_vel = [4, 3]
+                self.score = 0
+
+        # Чтение потоков ЭМГ
+        #try:
+        signal, _ = self.parent_gui.stream.get_data(2)
+        fs = self.parent_gui.stream.info["sfreq"]
+        chlist = self.parent_gui.stream.info["ch_names"]
+        
+        result = {}
+        
+        for channel in self.parent_gui.emg_feed_window.active_chnames:
+        
+            idx = self.parent_gui.emg_feed_window.emg_ids[channel]
+            bsl_channel = self.parent_gui.emg_feed_window.baseline_params[channel]
+            result[channel] = get_online_EMG(signal[idx, :], fs, bsl_channel)
+        
+        # Берём среднее за короткий отрезок (сглаживание)
+        lex_val = result['LEX'] if "LEX" in self.parent_gui.emg_feed_window.active_chnames else 0
+        # if lex_val < 0:
+        #     lex_val = 0
+        lfl_val = result['LFL'] if "LFL" in self.parent_gui.emg_feed_window.active_chnames else 0
+        if lfl_val < 0:
+            lfl_val = 0
+
+        # Нормализация и отображение на индикаторах
+        lex_scaled = int(50 + 50 * lex_val)
+        lfl_scaled = int(50 + 50 * lfl_val)
+        self.lex_bar.setValue(max(0, min(100, lex_scaled)))
+        self.lfl_bar.setValue(max(0, min(100, lfl_scaled)))
+
+        # Разность управляет движением
+        diff = - lex_val # + lfl_val  # >0 → вправо, <0 → влево
+        print ("diff:", diff)
+        self.paddle_x += diff * 10  # чувствительность
+        self.paddle_x = max(0, min(self.width() - self.paddle_width, self.paddle_x))
+            
+        # except Exception:
+        #     pass
+
+        self.update()
+
+    def close_game(self):
+        """Остановить таймер и закрыть окно."""
+        self.timer.stop()
+        self.close()

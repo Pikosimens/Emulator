@@ -88,26 +88,34 @@ def get_online_PPG(sig, fs, baseline_params, window_size=5):
 
 # ================================= EMG ========================================
 
-def compute_emg_params(sig, fs, window_size=0.3):
+def compute_emg_params(sig, fs, window_size=0.3, baseline = False):
     # Default bandpass 55-95 Hz, default window size 300 ms
     filtered = bandpass_EMG(sig, fs)
-    # mean_emg = np.mean(filtered)
-    # std_emg = np.std(filtered)
+    
     if (len(sig)/fs) < window_size:
         raise Warning("Signal is shorter than the specified window size.")
         return None
     border = int(0.1*fs) # 100 ms border to avoid edge effects
     
+    if baseline:
+        
+        cropped = filtered[border:-border]
+        cropped = cropped - np.mean(cropped)  # remove DC offset
+        mean_emg = np.mean(np.abs(cropped))
+        std_emg = np.std(cropped)
+        
+        return {
+        "mean_emg": mean_emg,
+        "std_emg": std_emg,
+        "cumsum_emg": cumsum_emg
+        }
+    
+    
     cropped = filtered[border:-border]
     cropped = cropped - np.mean(cropped)  # remove DC offset
-    cumsum_emg = np.sum(np.square(cropped))
+    cumsum_emg = np.sum(np.abs(cropped))
     return cumsum_emg
-    # return {
-    #     "mean_emg": mean_emg,
-    #     "std_emg": std_emg,
-    #     "cumsum_emg": cumsum_emg
-    # }
-        
+
 
         
 def get_baseline_EMG(sig, fs, duration=20, chunk_size=0.3):
@@ -125,13 +133,22 @@ def get_baseline_EMG(sig, fs, duration=20, chunk_size=0.3):
     chunks = np.array_split(baseline_sig, len(baseline_sig) // samples_per_chunk)
     
     cumsum_list = []
+    
     for chunk in chunks:
+        
         cumsum = compute_emg_params(chunk, fs)
         if cumsum is not None:
             cumsum_list.append(cumsum)
             
     mean_emg = np.mean(cumsum_list)
-    return mean_emg
+    std_emg = np.std(cumsum_list)
+    
+    params = {
+        "mean_emg": mean_emg,
+        "std_emg": std_emg
+    }
+    
+    return params
 
 
 
@@ -149,6 +166,6 @@ def get_online_EMG(sig, fs, baseline_params, window_size=0.3):
         return None
     
     # Compare with baseline
-    mean_emg_change = params / baseline_params
+    mean_emg_change = (params - baseline_params["mean_emg"]) / baseline_params["std_emg"]
     
     return mean_emg_change

@@ -74,7 +74,7 @@ class HeartApp(QWidget):
         self.start_btn.clicked.connect(self.start_stream)
         self.stop_btn.clicked.connect(self.stop_stream)
         self.connect_button.clicked.connect(self.connect_stream)
-        self.feed_button.clicked.connect(self.open_PPG_feed_window)
+        self.PPG_button.clicked.connect(self.open_PPG_feed_window)
         self.EMG_button.clicked.connect(self.open_EMG_feed_window)
         
         # State variables ------------------------
