@@ -296,8 +296,8 @@ class GameWindow(QDialog):
         
         # Берём среднее за короткий отрезок (сглаживание)
         lex_val = result['LEX'] if "LEX" in self.parent_gui.emg_feed_window.active_chnames else 0
-        # if lex_val < 0:
-        #     lex_val = 0
+        if lex_val < 0:
+            lex_val = 0
         lfl_val = result['LFL'] if "LFL" in self.parent_gui.emg_feed_window.active_chnames else 0
         if lfl_val < 0:
             lfl_val = 0
@@ -309,7 +309,7 @@ class GameWindow(QDialog):
         self.lfl_bar.setValue(max(0, min(100, lfl_scaled)))
 
         # Разность управляет движением
-        diff = - lex_val # + lfl_val  # >0 → вправо, <0 → влево
+        diff = - lex_val + lfl_val  # >0 → вправо, <0 → влево
         print ("diff:", diff)
         self.paddle_x += diff * 10  # чувствительность
         self.paddle_x = max(0, min(self.width() - self.paddle_width, self.paddle_x))

@@ -166,6 +166,8 @@ class FeedWindow(QDialog):
         
         for key, val in data.items():
             # convert val (-1…1 or percent change) → color
+            if key == 'hr_change': # we move HR down and HRV up
+                val = -val
             color = self.map_value_to_color(val-1)
             self.circles[key].set_color(color)
 
